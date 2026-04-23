@@ -86,9 +86,9 @@ Un nœud Log & Done enregistre chaque exécution pour faciliter le débogage et 
 
 ## Contenu du repository
 
-- `workflow_pipeline_veille_ia.json` — fichier d'export n8n 
+- `pipeline_veille_ia.json` — fichier d'export n8n 
 - `photot_workflow_n8n.png` — vue complète du pipeline
-- `exemple_veille_ia.eml` — exemple de rendu email
+- `photo_veille_ia_email.png` — exemple de rendu email
 
 ---
 
