@@ -1,0 +1,635 @@
+{
+  "name": "Pipeline veille IA",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "3a94c68b-5293-49f6-ae6c-cf464fb8c7b4",
+      "name": "Schedule Trigger (7h00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1760,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sources = [\n  { name: 'MIT Technology Review AI', url: 'https://www.technologyreview.com/feed/', category: 'Media' },\n  { name: 'VentureBeat AI', url: 'https://venturebeat.com/category/ai/feed/', category: 'Media' },\n  { name: 'The Batch DeepLearning.AI', url: 'https://www.deeplearning.ai/the-batch/rss/', category: 'Newsletter' },\n  { name: 'Google DeepMind Blog', url: 'https://deepmind.google/discover/blog/rss.xml', category: 'Lab' },\n  { name: 'Google Gemini Blog', url: 'https://blog.google/products/gemini/rss/', category: 'Lab' },\n  { name: 'Google Research Blog', url: 'https://research.google/blog/rss/', category: 'Research' },\n  { name: 'OpenAI News', url: 'https://openai.com/blog/rss.xml', category: 'Lab' },\n  { name: 'Anthropic Research', url: 'https://www.anthropic.com/rss/research.xml', category: 'Lab' },\n  { name: 'Anthropic News', url: 'https://www.anthropic.com/news/rss.xml', category: 'Lab' },\n  { name: 'Hugging Face Blog', url: 'https://huggingface.co/blog/feed.xml', category: 'Community' },\n  { name: 'Stanford HAI', url: 'https://hai.stanford.edu/news/rss', category: 'Research' },\n  { name: 'TechCrunch AI', url: 'https://techcrunch.com/category/artificial-intelligence/feed/', category: 'Media' },\n  { name: 'Wired AI', url: 'https://www.wired.com/feed/category/artificial-intelligence/latest/rss', category: 'Media' },\n  { name: 'Developpez.com IA', url: 'https://intelligence-artificielle.developpez.com/rss', category: 'Community' }\n];\n\nreturn sources.map(s => ({ json: s }));"
+      },
+      "id": "cf3085aa-e607-4f36-841c-67dbef440270",
+      "name": "Define Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1536,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "model": "tts-1-hd",
+        "input": "={{ $('Message a model Podcast').first().json.output[0].content[0].text }}",
+        "voice": "onyx",
+        "options": {
+          "response_format": "mp3",
+          "speed": 1
+        }
+      },
+      "id": "4c3c4b1c-b9d7-447e-8a5a-4bd9c9998425",
+      "name": "OpenAI TTS — Podcast Audio",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [
+        1776,
+        0
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "f2Ee3n58sbmYagKZ",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "={{ 'AI_Briefing_Podcast_' + $now.format('yyyy-MM-dd') + '.mp3' }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "mode": "list",
+          "value": "root"
+        },
+        "options": {}
+      },
+      "id": "0d9150ac-9266-4139-8566-d932fe5b735b",
+      "name": "Upload to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2000,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "9mPaIbvoh4nlKp4h",
+          "name": "Google Drive OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const briefing = $('Message a model - Veille finale').first().json.output[0].content[0].text || \"Aucune veille disponible.\";\nconst podcastLink =\n  $('Upload to Google Drive').first().json.webViewLink ||\n  $('Upload to Google Drive').first().json.webContentLink ||\n  \"\";\n\nreturn [\n  {\n    json: {\n      html: `\n        <h1>Veille IA du jour</h1>\n        <hr>\n        <div style=\"white-space: pre-wrap;\">${briefing}</div>\n        <hr>\n        <p><strong>Podcast du jour :</strong></p>\n        <p><a href=\"${podcastLink}\">Écouter le podcast</a></p>\n      `\n    }\n  }\n];"
+      },
+      "id": "67de5223-0b4e-4c39-a754-f03382d7e583",
+      "name": "Build Email HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        240
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $vars.RECIPIENT_EMAIL || 'lamia.brisebarre@gmail.com' }}",
+        "subject": "=Veille IA — {{ $now.format(\"dd MMMM yyyy\") }}",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "77a4b6ac-0533-43d4-9f30-c63f72709a99",
+      "name": "Gmail — Send Briefing",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2000,
+        160
+      ],
+      "webhookId": "c5e9403f-1ca8-43e5-b756-ea6d7ec9f6e9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "LN6LDmE1nkeIZwjA",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      status: \"done\",\n      completed_at: new Date().toISOString()\n    }\n  }\n];"
+      },
+      "id": "da7a60c6-b866-4b1d-8bf4-1dca8d14305f",
+      "name": "Log & Done",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2656,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all().map(item => item.json);\n\nconst now = new Date();\nconst HOURS_BACK = 168; // 7 jours\n\nfunction clean(text = \"\") {\n  return String(text)\n    .replace(/&#8217;/g, \"’\")\n    .replace(/&#8216;/g, \"‘\")\n    .replace(/&#8220;/g, \"“\")\n    .replace(/&#8221;/g, \"”\")\n    .replace(/&#8211;/g, \"–\")\n    .replace(/&#8212;/g, \"—\")\n    .replace(/&#8230;/g, \"…\")\n    .replace(/&amp;/g, \"&\")\n    .replace(/&quot;/g, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/<[^>]*>/g, \" \")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nfunction getDate(article) {\n  return article.isoDate || article.pubDate || article.date || \"\";\n}\n\n\nfunction getSource(article) {\n  const link = article.link || article.url || \"\";\n  const rawFeedTitle = clean(article.feedTitle || \"\");\n\n  if (rawFeedTitle) return rawFeedTitle;\n\n  if (link.includes(\"openai.com\")) return \"OpenAI\";\n  if (link.includes(\"anthropic.com\")) return \"Anthropic\";\n  if (link.includes(\"deepmind.google\")) return \"Google DeepMind\";\n  if (link.includes(\"blog.google\")) return \"Google Blog\";\n  if (link.includes(\"research.google\")) return \"Google Research\";\n  if (link.includes(\"huggingface.co\")) return \"Hugging Face\";\n  if (link.includes(\"technologyreview.com\")) return \"MIT Technology Review\";\n  if (link.includes(\"venturebeat.com\")) return \"VentureBeat\";\n  if (link.includes(\"techcrunch.com\")) return \"TechCrunch\";\n  if (link.includes(\"wired.com\")) return \"Wired\";\n  if (link.includes(\"hai.stanford.edu\")) return \"Stanford HAI\";\n  if (link.includes(\"deeplearning.ai\")) return \"DeepLearning.AI\";\n  if (link.includes(\"developpez.com\")) return \"Developpez.com IA\";\n\n  return \"Unknown\";\n}\n\nfunction getSummary(article) {\n  if (article[\"content:encodedSnippet\"]) {\n    return clean(article[\"content:encodedSnippet\"]).slice(0, 400);\n  }\n\n  if (article.contentSnippet) {\n    return clean(article.contentSnippet).slice(0, 400);\n  }\n\n  if (article.description) {\n    return clean(article.description).slice(0, 400);\n  }\n\n  if (article[\"content:encoded\"]) {\n    return clean(article[\"content:encoded\"]).slice(0, 400);\n  }\n\n  if (article.content) {\n    return clean(article.content).slice(0, 400);\n  }\n\n  return \"\";\n}\n\nfunction getTheme(article) {\n  const text = clean(`\n    ${article.title || \"\"}\n    ${article[\"content:encodedSnippet\"] || \"\"}\n    ${article.contentSnippet || \"\"}\n    ${article.description || \"\"}\n    ${article[\"content:encoded\"] || \"\"}\n    ${article.content || \"\"}\n    ${article.summary || \"\"}\n    ${article.feedTitle || \"\"}\n  `).toLowerCase();\n\n  if (\n    text.includes(\"agent\") ||\n    text.includes(\"agents\") ||\n    text.includes(\"automation\") ||\n    text.includes(\"copilot\")\n  ) {\n    return \"Automatisation & Agents\";\n  }\n\n  if (\n    text.includes(\"openai\") ||\n    text.includes(\"anthropic\") ||\n    text.includes(\"google\") ||\n    text.includes(\"gemini\") ||\n    text.includes(\"deepmind\") ||\n    text.includes(\"funding\") ||\n    text.includes(\"partnership\") ||\n    text.includes(\"enterprise\")\n  ) {\n    return \"Acteurs & Stratégies\";\n  }\n\n  if (\n    text.includes(\"tool\") ||\n    text.includes(\"tools\") ||\n    text.includes(\"studio\") ||\n    text.includes(\"model\") ||\n    text.includes(\"sdk\") ||\n    text.includes(\"api\") ||\n    text.includes(\"tts\")\n  ) {\n    return \"Outils & Produits IA\";\n  }\n\n  if (\n    text.includes(\"customer\") ||\n    text.includes(\"workflow\") ||\n    text.includes(\"deployment\") ||\n    text.includes(\"operations\") ||\n    text.includes(\"productivity\") ||\n    text.includes(\"use case\")\n  ) {\n    return \"Cas d’usage concrets\";\n  }\n\n  return \"Tendances & Signaux faibles\";\n}\n\nfunction isRecent(date) {\n  if (!date) return false;\n  const d = new Date(date);\n  if (isNaN(d.getTime())) return false;\n  const diff = (now - d) / (1000 * 60 * 60);\n  return diff <= HOURS_BACK;\n}\n\nfunction isNoise(article) {\n  const title = clean(article.title || \"\").toLowerCase();\n  return (\n    title.includes(\"the download\") ||\n    title.includes(\"pie day\") ||\n    title.includes(\"newsletter\") ||\n    title.includes(\"podcast\")\n  );\n}\n\nconst sourceCountsBefore = {};\nfor (const a of input) {\n  const source = getSource(a);\n  sourceCountsBefore[source] = (sourceCountsBefore[source] || 0) + 1;\n}\n\nconst seen = new Set();\n\nconst deduped = input.filter(a => {\n  const key = clean((a.link || a.url || a.title || \"\").toLowerCase())\n    .replace(/[^a-z0-9]/g, \"\")\n    .slice(0, 120);\n\n  if (!key || seen.has(key)) return false;\n  seen.add(key);\n  return true;\n});\n\nconst filtered = deduped\n  .filter(a => isRecent(getDate(a)))\n  .filter(a => !isNoise(a))\n  .map(a => ({\n  title: clean(a.title || \"\"),\n  url: a.link || a.url || \"\",\n  date: getDate(a),\n  source: getSource(a),\n  summary: getSummary(a),\n  theme: getTheme(a)\n}));\n\nconst sourceCountsAfter = {};\nfor (const a of filtered) {\n  sourceCountsAfter[a.source] = (sourceCountsAfter[a.source] || 0) + 1;\n}\n\nconst unknown_articles = filtered\n  .filter(a => a.source === \"Unknown\")\n  .map(a => ({\n    title: a.title,\n    url: a.url\n  }));\n\nreturn [\n  {\n    json: {\n      article_count_after: filtered.length,\n      unknown_articles,\n      articles: filtered\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -672,
+        112
+      ],
+      "id": "5bfc8d78-065b-47a4-b413-c1f98629ad9f",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -1120,
+        112
+      ],
+      "id": "287a0711-a541-4551-8f7f-ab69bfce12d3",
+      "name": "RSS Read",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "maxItems": 50
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        -896,
+        112
+      ],
+      "id": "9948c7fc-8c8a-4e19-b60c-b42071944976",
+      "name": "Limit"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Voici les articles retenus pour le podcast :\n\n{{ JSON.stringify($('Code in JavaScript2').first().json.selected_articles, null, 2) }}\n\nTa mission :\nTransformer ces articles en script de podcast audio en français.\n\nObjectif :\nProduire une chronique audio courte, fluide, vivante et agréable à écouter.\n\nRègles d’ouverture obligatoires :\n- commence exactement par : Veille du {{ $now.format(\"dd MMMM yyyy\") }}.\n- enchaîne avec une phrase neutre et naturelle, sans nombre fixe\n- exemple : Voici les sujets à retenir aujourd’hui.\n- puis entre directement dans le premier sujet\n\nInterdictions :\n- pas de “bonjour”, “salut”, “bienvenue”\n- pas d’introduction chaleureuse\n- pas de markdown\n- pas de listes à puces\n- pas d’indications comme “[musique]”, “[pause]”, “[intro]”\n\nContraintes :\n- durée 3 à 5 minutes\n- ton direct, fluide, conversationnel\n- phrases courtes\n- vocabulaire simple\n- pas de jargon inutile\n- pas de ton académique\n\nStyle oral obligatoire :\n- écris comme pour une chronique audio, pas comme pour un article\n- une idée principale par phrase\n- parle comme à une seule personne\n- va droit au fait\n- garde un ton sérieux mais vivant\n\nInterdictions de style :\n- n’utilise pas “cela signifie”\n- n’utilise pas “il s’agit de”\n- n’utilise pas “un coup d’œil sur”\n- n’utilise pas “parlons de”\n- n’utilise pas de formulations abstraites ou académiques\n\nExemples de formulation attendue :\n- “Google élargit l’accès à AI Studio.”\n- “En clair, les développeurs ont plus de marge.”\n- “Autre sujet important.”\n- “Enfin.”\n\nOrdre de traitement obligatoire :\n- commence par le sujet au plus fort impact business, marché, produit ou usage\n- ne commence jamais par un sujet secondaire ou conceptuel\n- garde les sujets plus faibles pour la fin\n- si 5 articles sont retenus, traite-les du plus fort au moins fort\n\nRègles éditoriales :\n- garde uniquement les sujets les plus intéressants\n- n’ouvre jamais sur un sujet conceptuel, culturel ou secondaire\n- privilégie les annonces, déploiements, usages concrets, mouvements d’acteurs et impacts métier\n- si un sujet est trop abstrait ou trop faible, supprime-le\n- ne garde pas un sujet juste parce qu’il est intellectuellement intéressant\n- remplace les phrases vagues par des conséquences concrètes\n\nRègles de fidélité :\n- utilise uniquement les articles fournis\n- n’invente aucun fait\n- n’invente aucun acteur\n- n’invente aucune source\n- ne change pas le sens des articles\n- reste fidèle à l’angle réel de chaque article\n- ne transforme pas un sujet précis en tendance générale si ce n’est pas explicitement présent\n- ne mélange jamais deux articles entre eux\n\nRègles de diction pour la voix :\n- évite les parenthèses\n- évite les deux-points répétés\n- évite les phrases trop longues\n- écris des phrases faciles à lire à voix haute\n- préfère des transitions simples comme : D’abord, Ensuite, Autre sujet important, Enfin\n- si un nom est difficile à prononcer, simplifie légèrement la tournure autour\n- évite les caractères spéciaux inutiles\n\nStructure attendue :\n1. ouverture très courte avec la date du jour\n2. 3 à 5 sujets principaux\n3. conclusion courte\n\nFormat obligatoire pour chaque sujet :\n- une phrase factuelle courte\n- une phrase “Pourquoi ça compte”\n- une phrase “Ce que ça change”\n- puis transition vers le sujet suivant\n\nInterdictions absolues :\n- n’utilise jamais “cela signifie”\n- n’utilise jamais “parlons de”\n- n’utilise jamais d’analogie culturelle ou de référence type science-fiction\n- n’élargis pas un sujet au-delà de ce qui est présent dans l’article\n- si un sujet est trop conceptuel, élimine-le\n\nExemple de format attendu :\nGoogle élargit l’accès à AI Studio pour ses abonnés Pro et Ultra.\nPourquoi ça compte : Google renforce l’attractivité de son environnement pour les développeurs.\nCe que ça change : les équipes qui testent déjà Gemini disposent de plus de marge pour prototyper vite.\n\nRègle de précision finale :\n- n’utilise jamais “cela pourrait révolutionner”\n- n’utilise jamais “cela change la donne”\n- n’utilise jamais “cela améliore” sans préciser pour qui ou pour quoi\n- remplace toute conséquence vague par une conséquence concrète, limitée et crédible\n\nExemples :\n- mauvais : “cela pourrait révolutionner la manière dont on communique avec nos appareils”\n- bon : “Google pousse plus loin les usages vocaux dans ses produits, ce qui peut accélérer l’adoption de fonctions audio plus naturelles”\n\n- mauvais : “cela améliore la technologie vocale”\n- bon : “Google renforce sa brique vocale, avec un impact direct sur les assistants, la lecture audio et les interfaces parlées”\n\nContraintes finales non négociables :\n- écris toute la date en français : “{{ $now.format(\"dd MMMM yyyy\") }}” doit devenir par exemple “21 avril 2026”, jamais “21 April 2026”\n- n’utilise jamais l’expression “cela signifie”\n- n’utilise jamais l’expression “cela pourrait”\n- si tu écris une conséquence, formule-la directement et concrètement\n- exemple : “Google renforce sa brique vocale dans ses produits”\n- exemple : “les interfaces audio deviennent plus naturelles dans l’écosystème Google”\n\nRègle de fluidité orale :\n- n’annonce pas littéralement “Pourquoi ça compte” ou “Ce que ça change”\n- intègre ces idées naturellement dans la phrase\n- le script doit sonner comme une chronique parlée, pas comme une fiche structurée lue à voix haute\n\nExemple :\nau lieu de\n“Pourquoi ça compte : Google renforce l’attractivité de son environnement pour les développeurs.”\ndis\n“Google rend son environnement plus attractif pour les développeurs.”\n\nau lieu de\n“Ce que ça change : les équipes qui testent déjà Gemini disposent de plus de marge pour prototyper vite.”\ndis\n“Pour les équipes qui testent déjà Gemini, ça donne plus de marge pour prototyper vite.”\n\nRègle de rythme audio :\n- fais des paragraphes très courts\n- une information principale = un petit bloc de 2 à 3 phrases maximum\n- saute une ligne entre chaque sujet\n- ne mets jamais deux sujets dans le même paragraphe\n- si un sujet est trop conceptuel ou trop historique, élimine-le au profit d’un sujet plus concret\n\nRègle de sélection finale des sujets :\n- ne garde que les sujets les plus concrets et les plus utiles\n- élimine les sujets trop conceptuels, historiques, culturels ou éditoriaux\n- si un sujet parle surtout d’un livre, d’une réflexion générale ou d’un angle peu actionnable, supprime-le\n- privilégie les annonces produit, déploiements, usages concrets, mouvements d’acteurs et impacts business\n- s’il faut réduire de 5 à 3 ou 4 sujets pour garder uniquement les meilleurs, fais-le\n\nInterdictions finales de formulation :\n- n’utilise jamais “parlons de”\n- n’utilise jamais “ensuite, parlons de”\n- n’annonce jamais un nombre fixe de sujets\n- évite de répéter le nom d’un même acteur en ouverture de deux sujets consécutifs\n- si deux sujets viennent du même acteur, varie la transition et va droit au fait\n\nDernières règles de formulation :\n- n’utilise jamais “on parle de”\n- n’utilise jamais “cela permet”\n- préfère des transitions très simples comme :\n  “Autre point important.”\n  “Deuxième sujet.”\n  “Enfin.”\n- préfère des formulations directes :\n  “Pour les équipes qui testent déjà Gemini, la marge de manœuvre augmente.”\n  “Google pousse plus loin ses interfaces audio.”\n- si un 3e sujet est moins fort que les deux premiers, raccourcis-le fortement ou supprime-le\n\nRègle de coupe finale :\n- si après tri il reste seulement 2 très bons sujets et 1 sujet faible, garde seulement 2 sujets\n- ne remplis jamais le script avec un sujet secondaire\n- élimine les livres, réflexions générales, essais, commentaires ou angles trop éditoriaux\n- le podcast peut faire 2, 3 ou 4 sujets, selon la qualité réelle\n- mieux vaut 2 sujets forts qu’un 3e sujet moyen\n\nDernier filtre de style :\n- n’utilise jamais “cela renforcera”\n- n’utilise jamais “cela signifie”\n- n’utilise jamais “en matière de”\n- remplace ces tournures par des phrases directes et concrètes\n\nExemples :\n- au lieu de “Cela renforcera les capacités des produits Google en matière de communication vocale”\n  écris “Google pousse plus loin les usages vocaux dans ses produits”\n\n- au lieu de “cela signifie des interactions plus naturelles”\n  écris “les échanges vocaux deviennent plus fluides pour les utilisateurs”\n\n\nRetourne uniquement le script final, en texte brut."
+            },
+            {
+              "role": "system",
+              "content": "You are a podcast writer. You write natural spoken scripts."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        1264,
+        16
+      ],
+      "id": "0ca7903a-ff93-4edc-af73-79ad2d35b9e3",
+      "name": "Message a model Podcast",
+      "credentials": {
+        "openAiApi": {
+          "id": "f2Ee3n58sbmYagKZ",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Voici les articles filtrés du jour au format JSON :\n\n{{ JSON.stringify($json.articles, null, 2) }}\n\nTu dois évaluer ces articles pour une veille stratégique IA en français.\n\nImportant :\n- utilise uniquement les articles réellement fournis ci-dessus\n- n’invente aucun article\n- n’invente aucune URL\n- n’invente aucune source\n- n’invente aucune date\n- si une information manque, laisse-la vide mais ne la remplace jamais par un exemple\n- conserve exactement le titre, l’url, la source, la date et le summary de l’article d’origine si tu décides de le garder\n\nTa mission :\nPour chaque article, décide :\n- s’il doit être retenu ou rejeté\n- son niveau d’intérêt éditorial\n- sa thématique principale\n- pourquoi il mérite d’être dans la veille ou non\n\nRègles :\n- ne garde pas un article juste pour remplir une thématique\n- vise en priorité entre 5 et 8 articles retenus au total si la qualité le permet\n- une thématique peut avoir 0, 1, 2 ou 3 articles selon leur qualité réelle\n- privilégie le signal, l’intérêt business, produit, marché ou usage\n- élimine seulement les sujets vraiment faibles, redondants ou anecdotiques\n- s’il y a plusieurs articles utiles, garde-les même s’ils sont moins spectaculaires, tant qu’ils apportent un angle produit, marché, outil ou usage\n- si plusieurs articles d’une même thématique sont réellement complémentaires (angles différents, acteurs différents, cas d’usage différents), tu peux en garder jusqu’à 3\n\nRetourne uniquement un JSON valide avec cette structure exacte :\n\n{\n  \"selected_articles\": [\n    {\n      \"title\": \"\",\n      \"decision\": \"keep\",\n      \"theme\": \"\",\n      \"editorial_score\": 0,\n      \"why_keep\": \"\"\n    }\n  ],\n  \"rejected_articles\": [\n    {\n      \"title\": \"\",\n      \"decision\": \"reject\",\n      \"why_reject\": \"\"\n    }\n  ]\n}\n\nImportant :\n- ne réécris pas les champs url, source, date ou summary\n- utilise le titre exact de l’article comme identifiant\n- garde uniquement les métadonnées éditoriales"
+            },
+            {
+              "role": "system",
+              "content": "You are an expert AI editor. You evaluate article relevance for a daily AI market intelligence briefing.\n\nYou must think like a senior analyst:\n- keep only high-signal items\n- reject weak, repetitive, generic or low-value items\n- assign the most relevant theme\n- decide how much coverage each theme deserves based on the actual quality of the articles\n\nReturn valid JSON only."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        16,
+        -64
+      ],
+      "id": "8e3798e9-f238-45d3-8834-d8a5f10d6d1e",
+      "name": "Message a model Scoring éditorial",
+      "credentials": {
+        "openAiApi": {
+          "id": "f2Ee3n58sbmYagKZ",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output?.[0]?.content?.[0]?.text || \"\";\n\nconst cleaned = raw\n  .replace(/^```json\\s*/i, \"\")\n  .replace(/^```\\s*/i, \"\")\n  .replace(/\\s*```$/, \"\")\n  .trim();\n\nconst parsed = JSON.parse(cleaned);\n\nreturn [\n  {\n    json: parsed\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        -64
+      ],
+      "id": "8c8edb2b-6883-4ae3-a72d-4b5a95876f62",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const originalInput = $('Code in JavaScript').first().json || {};\nconst scoringInput = $('Code in JavaScript1').first().json || {};\n\nconst originalArticles = originalInput.articles || [];\nconst selectedArticles = scoringInput.selected_articles || [];\n\nconst selectedMap = new Map(\n  selectedArticles.map(item => [item.title, item])\n);\n\nconst merged = originalArticles\n  .filter(article => selectedMap.has(article.title))\n  .map(article => {\n    const scored = selectedMap.get(article.title);\n    return {\n      ...article,\n      theme: scored.theme || article.theme || \"\",\n      editorial_score: scored.editorial_score || 0,\n      why_keep: scored.why_keep || \"\"\n    };\n  })\n  .sort((a, b) => (b.editorial_score || 0) - (a.editorial_score || 0));\n\nreturn [\n  {\n    json: {\n      selected_articles: merged,\n      selected_count: merged.length\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        112
+      ],
+      "id": "3578b5f4-d5e3-4eeb-8db8-7150a82e42a6",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "https://www.notion.so/349b07f8ba7b801cbc6af811c5a82815?v=349b07f8ba7b80c99e2f000c9c495485",
+          "mode": "url"
+        },
+        "title": "=",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Title|title",
+              "title": "={{ $json.Title }}"
+            },
+            {
+              "key": "URL|url",
+              "urlValue": "={{ $json.URL }}"
+            },
+            {
+              "key": "Date Sent|date",
+              "date": "={{ $json[\"Date Sent\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        864,
+        112
+      ],
+      "id": "84261625-bf24-4dc1-9b0b-5481b2034ab3",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "TvmrehsrVfq7NrpC",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const articles = $json.selected_articles || [];\n\nreturn articles.map(article => ({\n  json: {\n    Title: article.title,\n    URL: article.url,\n    \"Date Sent\": new Date().toISOString()\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        112
+      ],
+      "id": "f373db21-1b2f-4e79-ae57-cb3418c82e7c",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "https://www.notion.so/349b07f8ba7b801cbc6af811c5a82815?v=349b07f8ba7b80c99e2f000c9c495485",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -448,
+        112
+      ],
+      "id": "7817986e-7797-410b-8bcc-2e3fa9ebf0c2",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "TvmrehsrVfq7NrpC",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const currentInput = $('Code in JavaScript').first().json || {};\nconst notionItems = $input.all().map(item => item.json);\n\n// titres déjà envoyés, normalisés\nconst sentTitles = new Set(\n  notionItems\n    .map(item => (item.property_title || item.name || \"\").toLowerCase().trim())\n    .filter(Boolean)\n);\n\nconst currentArticles = currentInput.articles || [];\n\nconst freshArticles = currentArticles.filter(article => {\n  const title = (article.title || \"\").toLowerCase().trim();\n  return !sentTitles.has(title);\n});\n\nreturn [\n  {\n    json: {\n      article_count_before_memory: currentArticles.length,\n      article_count_after_memory: freshArticles.length,\n      articles: freshArticles\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        112
+      ],
+      "id": "c8bd9680-67d3-4af3-95a4-600362f78943",
+      "name": "Code (exclude send)"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Voici les articles :\n\n{{ JSON.stringify($json.selected_articles, null, 2) }}\n\nTa tâche :\n- lis ces articles\n- résume-les en français en 5 à 10 lignes maximum\n- n’invente rien\n- base-toi uniquement sur les articles\n\nRetourne uniquement le texte."
+            },
+            {
+              "content": "=Voici les articles sélectionnés du jour :\n\n{{ JSON.stringify($json.selected_articles, null, 2) }}\n\nTu es un analyste expert du marché de l’IA.\n\nTa mission :\nRédiger une veille stratégique quotidienne en français à destination de Product Owners, Product Managers, consultants et opérateurs IA.\n\nRègles :\n- utilise uniquement les articles fournis\n- n’invente aucune information\n- privilégie le signal utile et actionnable\n- supprime les sujets faibles ou redondants\n- sois concret, direct et lisible\n\nFormat attendu :\n\n# Veille du marché de l’IA — {{ $now.format(\"dd MMMM yyyy\") }}\n\nCommence par un résumé exécutif de 2 à 4 lignes.\n\nPuis structure la veille avec uniquement les sections pertinentes parmi :\n\n## Outils & Produits IA\n## Acteurs & Stratégies\n## Automatisation & Agents\n## Cas d’usage concrets\n## Tendances & Signaux faibles\n\nPour chaque sujet :\n- un sous-titre\n- un résumé court\n- Pourquoi ça compte :\n- Ce que ça implique concrètement :\n- Source\n- Lien\n- Label : À creuser ou Pas prioritaire\n- ⚡ À fort impact uniquement si vraiment justifié\n\nTermine par :\n\n## 🔎 À surveiller\n- 2 à 3 signaux maximum, uniquement déduits des articles\n\nRetourne uniquement la veille finale en Markdown."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        864,
+        -64
+      ],
+      "id": "515a738a-c632-4490-a51c-db4b2988b193",
+      "name": "Message a model - Veille finale",
+      "credentials": {
+        "openAiApi": {
+          "id": "f2Ee3n58sbmYagKZ",
+          "name": "OpenAI account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger (7h00)": {
+      "main": [
+        [
+          {
+            "node": "Define Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define Sources": {
+      "main": [
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI TTS — Podcast Audio": {
+      "main": [
+        [
+          {
+            "node": "Upload to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Build Email HTML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log & Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email HTML": {
+      "main": [
+        [
+          {
+            "node": "Gmail — Send Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail — Send Briefing": {
+      "main": [
+        [
+          {
+            "node": "Log & Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model Podcast": {
+      "main": [
+        [
+          {
+            "node": "OpenAI TTS — Podcast Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model Scoring éditorial": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Message a model - Veille finale",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Code (exclude send)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code (exclude send)": {
+      "main": [
+        [
+          {
+            "node": "Message a model Scoring éditorial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model - Veille finale": {
+      "main": [
+        [
+          {
+            "node": "Message a model Podcast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "556fe7b1-e7a8-4281-a53b-755f97666884",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "377b8e56e06fd0b708ded9665d8b003a1bdd4f5505c67a0325f83bc8c7221f5b"
+  },
+  "id": "GMKo3Vn4FAEF0wgu",
+  "tags": []
+}
